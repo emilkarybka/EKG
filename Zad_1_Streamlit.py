@@ -104,7 +104,7 @@ def load_my_data():
     data = pd.read_csv(filename_1, 
                        sep='\t', 
                        decimal=',', 
-                       names=['czas',  'ecg'], # Definiujemy 3 kolumny
+                       names=['czas','ecg'], # Definiujemy 2 kolumny
                        header=None) 
     return data
 
@@ -166,14 +166,14 @@ st.markdown(f"""
 
 #%%-----------------------------SEKCJA 1 - ZAKRES SYGNAŁU----------------------
 
-col1, col2, col3 = st.columns([2.0,1.5,5])
+col1, col3 = st.columns([2.0,1.5,5])
     
 with col1:
     
 #---------------------------Kolumna 1 
         
     st.dataframe(df,height=265, use_container_width=True)
-
+'''
 with col2:
 
     #-----------------------Kolumna 2
@@ -189,7 +189,7 @@ with col2:
     dane_pie = {
     "Status": ["Fragment do analizy", "Pozostała część"],
     "Liczba próbek": [ile_zostalo, ile_wycieto]}
-
+'''
 # 3. Tworzenie wykresu Plotly Express
     fig_pie = px.pie(
     dane_pie, 
