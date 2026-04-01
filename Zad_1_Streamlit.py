@@ -200,7 +200,7 @@ fig_pie = px.pie(
 )
 
 # 4. Stylizacja
- fig_pie.update_layout(
+fig_pie.update_layout(
     height=200,
     margin=dict(l=20, r=20, t=0, b=20),
     showlegend=True,
@@ -210,10 +210,10 @@ fig_pie = px.pie(
     
 with col3:
         
-    fig = go.Figure()
+fig = go.Figure()
 
         # 2. Dodajemy Sygnał Surowy (niebieski, cieńszy)
-    fig.add_trace(go.Scatter(
+fig.add_trace(go.Scatter(
             x=df_stary['czas'], 
             y=df_stary['ecg'], 
             mode='lines',
@@ -222,7 +222,7 @@ with col3:
         ))
 
         # 3. Dodajemy Sygnał Przefiltrowany (czerwony, grubszy)
-    fig.add_trace(go.Scatter(
+fig.add_trace(go.Scatter(
             x=df['czas'], 
             y=df['ecg'], 
             mode='lines',
@@ -231,7 +231,7 @@ with col3:
         ))
 
         # 4. Stylizacja wykresu
-    fig.update_layout(
+fig.update_layout(
             height=230,
             margin=dict(l=0, r=0, t=10, b=0),
             paper_bgcolor='rgba(0,0,0,0)',
