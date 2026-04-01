@@ -6,7 +6,6 @@ from pathlib import Path
 from scipy.signal import savgol_filter, find_peaks
 import warnings
 import emd
-import seaborn as sns
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
