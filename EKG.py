@@ -11,7 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import neurokit2 as nk
-df = pd.DataFrame()
+
 #%%--------------------------------Lokalizacja pliku---------------------------
 #streamlit run 'C:/Users/emili/Desktop/EKG'
 # Ścieżka dostosowana
