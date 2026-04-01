@@ -209,8 +209,8 @@ fig_pie.update_layout(
 st.plotly_chart(fig_pie, use_container_width=True)
     
 with col3:
-        
-fig = go.Figure()
+
+    fig = go.Figure()
 
         # 2. Dodajemy Sygnał Surowy (niebieski, cieńszy)
 fig.add_trace(go.Scatter(
