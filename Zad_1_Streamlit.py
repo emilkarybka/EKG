@@ -78,18 +78,39 @@ st.markdown(f"""
 #%%--------------------------------Ładowanie pliku-----------------------------
 
 @st.cache_data
+@st.cache_data(ttl=1, show_spinner=False)
+@st.cache_data(show_spinner=False)
 def load_my_data():
-    file = 'ecg.txt'
-    path_inp = "C:/Users/emili/Desktop/EKG"
-    full_path = os.path.join(path_inp, file)
-    
-    # Dodajemy names i usuwamy header=None, jeśli plik faktycznie ma 3 kolumny
-    data = pd.read_csv(full_path, 
+    filename_1 = "ecg.txt"
+    file_id1 = '1h51q75CzyWE75pPT0uI6uXoZzdVmFJkJ'
+  
+    # Funkcja pomocnicza do pobierania
+    def download_file(file_id, output_name):
+        url = f'https://drive.google.com/uc?id={file_id}'
+        # Jeśli plik istnieje, usuwamy go, aby gdown pobrał nową wersję
+        if os.path.exists(output_name):
+            os.remove(output_name)
+        
+        try:
+            # gdown czasami potrzebuje parametru fuzzy=True dla GDrive
+            gdown.download(url, output_name, quiet=False, fuzzy=True)
+        except Exception as e:
+            st.error(f"Błąd pobierania {output_name}: {e}")
+
+    # Pobieranie plików
+    with st.spinner('Synchronizacja z Google Drive...'):
+        download_file(file_id1, filename_1)
+
+    # Wczytywanie
+    data = pd.read_csv(filename_1, 
                        sep='\t', 
                        decimal=',', 
                        names=['czas', 'oddech', 'ecg'], # Definiujemy 3 kolumny
                        header=None) 
     return data
+
+# Wywołanie danych
+df = load_my_data()
 
 df = load_my_data()
 df.columns = ['czas','oddech','ecg']
