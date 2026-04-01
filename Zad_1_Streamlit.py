@@ -13,7 +13,6 @@ from pathlib import Path
 from scipy.signal import savgol_filter
 from scipy.signal import find_peaks
 import warnings
-import seaborn as sns
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
