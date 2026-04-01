@@ -206,7 +206,7 @@ fig_pie.update_layout(
     showlegend=True,
     legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
 )
-    st.plotly_chart(fig_pie, use_container_width=True)
+st.plotly_chart(fig_pie, use_container_width=True)
     
 with col3:
         
@@ -248,7 +248,7 @@ fig.update_layout(
         )
 
     with st.container(border=True):
-        st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
     # Dodajemy grubszą linię dla oddzielenia (tę, którą robiliśmy wcześniej)
 
 
