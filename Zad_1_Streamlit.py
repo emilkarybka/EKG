@@ -110,8 +110,6 @@ def load_my_data():
 
 # Wywołanie danych
 df = load_my_data()
-
-df = load_my_data()
 df.columns = ['czas','ecg']
 df['czas'] = df['czas'].astype(str).str.replace(',', '.', regex=False)
 
