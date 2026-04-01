@@ -248,7 +248,7 @@ fig.update_layout(
         )
 
 with st.container(border=True):
-st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
     # Dodajemy grubszą linię dla oddzielenia (tę, którą robiliśmy wcześniej)
 
 
