@@ -20,7 +20,7 @@ from plotly.subplots import make_subplots
 import neurokit2 as nk
 import emd
 import scipy.ndimage as ndimage
-
+import gdown
 #%%--------------------------------Lokalizacja pliku---------------------------
 
 path_inp='C:/Users/emili/Desktop/EKG'
