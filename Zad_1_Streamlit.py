@@ -104,7 +104,7 @@ def load_my_data():
     data = pd.read_csv(filename_1, 
                        sep='\t', 
                        decimal=',', 
-                       names=['czas', 'oddech', 'ecg'], # Definiujemy 3 kolumny
+                       names=['czas',  'ecg'], # Definiujemy 3 kolumny
                        header=None) 
     return data
 
@@ -112,7 +112,7 @@ def load_my_data():
 df = load_my_data()
 
 df = load_my_data()
-df.columns = ['czas','oddech','ecg']
+df.columns = ['czas','ecg']
 df['czas'] = df['czas'].astype(str).str.replace(',', '.', regex=False)
 
 # duration = 200
