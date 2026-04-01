@@ -9,3 +9,4 @@ Pillow
 gdown
 matplotlib
 scipy
+neurokit2
