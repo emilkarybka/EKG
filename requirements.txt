@@ -8,4 +8,4 @@ numpy
 Pillow
 gdown
 matplotlib
-scipy.signal
+scipy
