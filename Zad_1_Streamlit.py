@@ -200,7 +200,7 @@ fig_pie = px.pie(
 )
 
 # 4. Stylizacja
-    fig_pie.update_layout(
+ fig_pie.update_layout(
     height=200,
     margin=dict(l=20, r=20, t=0, b=20),
     showlegend=True,
