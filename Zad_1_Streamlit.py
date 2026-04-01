@@ -247,7 +247,7 @@ fig.update_layout(
             yaxis_title="Amplituda [mV]"
         )
 
-    with st.container(border=True):
+with st.container(border=True):
 st.plotly_chart(fig, use_container_width=True)
     # Dodajemy grubszą linię dla oddzielenia (tę, którą robiliśmy wcześniej)
 
