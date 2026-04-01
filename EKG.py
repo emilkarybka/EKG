@@ -142,7 +142,6 @@ with col2:
     zakres_czasu = st.slider("Wybierz zakres czasu do analizy [s]:", min_czas, max_czas, (min_czas, domyslny_koniec), step=0.1)
     
     df_stary = df.copy()
-    st.write("Dostępne kolumny w pliku:", df.columns.tolist())
     df_filtered_view = df[(df['czas'] >= zakres_czasu[0]) & (df['czas'] <= zakres_czasu[1])].copy()
 
     # --- KLUCZOWA POPRAWKA: FILTRACJA MUSI BYĆ TUTAJ ---
