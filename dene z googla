@@ -1,0 +1,3 @@
+def load_my_data():
+    filename_1 = "ecg.txt"
+    file_id1 = '1h51q75CzyWE75pPT0uI6uXoZzdVmFJkJ'
