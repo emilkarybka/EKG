@@ -1,3 +1,781 @@
+import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
+import webbrowser
+import py3Dmol
+import pandas as pd
+import os
+import glob
+from rdkit import Chem
+from rdkit.Chem import Descriptors, rdDetermineBonds, Draw
+import subprocess
+from rdkit.Chem import rdmolfiles  # Dodajemy ten import
+import shutil
+import re
+from natsort import natsorted
+import streamlit as st
+from rdkit import Chem
+from rdkit.Chem import Draw
+from io import BytesIO
+from PIL import Image
+import py3Dmol
+import streamlit.components.v1 as components
+from rdkit.Chem import rdMolAlign
+from rdkit.Chem import AllChem, Draw
+import numpy as np 
+import gdown
+from analiza_podstawnikow import wykonaj_analize_L2
+
+
+
+def open_in_chemcraft(file_path):
+    chemcraft_path = r"C:\Chemcraft/Chemcraft.exe" 
+    subprocess.Popen([chemcraft_path, file_path])
+    # UŻYCIE: open_in_chemcraft(df.iloc[0]['Full_Path'])
+    
+    
+def open_by_id(mol_id, dataframe):
+    try:
+        # Pobieramy ścieżkę dla podanego ID
+        path = dataframe.loc[dataframe['ID'] == mol_id, 'Starting_Structure_Full_Path'].values[0]
+        open_in_chemcraft(path)
+        print(f"Otwieranie struktury: {mol_id}")
+    except IndexError:
+        print(f"BŁĄD: Nie znaleziono związku o ID: {mol_id}")
+        
+        
+def pokaz_freq(mol_id):
+    row = df[df['ID'] == mol_id]
+    if not row.empty:
+        freq_list = row['S0_Freq_Top20'].values[0]
+        if isinstance(freq_list, list):
+            print(f"\n--- Precyzyjna lista częstotliwości dla: {mol_id} ---")
+            for i, f in enumerate(freq_list, 1):
+                tag = " <-- IMAGINARY" if f < 0 else ""
+                # Zmienione na .6f (6 miejsc po przecinku)
+                print(f"{i:2d}. {f:14.6f} cm⁻¹{tag}")      
+        
+        
+def stworz_mol_z_optymalizacji(mol_start, xyz_text):
+    if mol_start is None or not xyz_text:
+        return None
+    try:
+        # 1. Tworzymy nowy obiekt na bazie startowego (żeby mieć te same wiązania)
+        new_mol = Chem.Mol(mol_start)
+        
+        # 2. Tworzymy obiekt pomocniczy z samego XYZ, aby wyciągnąć współrzędne
+        num_atoms = len(xyz_text.strip().split('\n'))
+        xyz_mol = Chem.MolFromXYZBlock(f"{num_atoms}\n\n{xyz_text}")
+        
+        # 3. Pobieramy konformację z XYZ
+        conf = xyz_mol.GetConformer()
+        
+        # 4. Podmieniamy współrzędne w naszym nowym obiekcie
+        # WAŻNE: Zakładamy, że kolejność atomów w XYZ z Gaussiana jest taka sama jak w mol_start
+        new_conf = new_mol.GetConformer()
+        for i in range(num_atoms):
+            new_conf.SetAtomPosition(i, conf.GetAtomPosition(i))
+        
+        new_mol.AddConformer(new_conf, assignId=True)
+        return new_mol
+    except Exception as e:
+        print(f"Błąd konwersji: {e}")
+        return None
+
+
+def natural_sort_key(s):
+    return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', str(s))]
+
+if st.sidebar.button("🔄 Force reload data"):
+    st.cache_data.clear() # Czyści CAŁY cache aplikacji
+    st.rerun() # Odświeża aplikację
+    
+st.set_page_config(layout="wide")
+# file='stroke.csv'
+# path_inp="C:/Michal/Dydaktyka/2025-2026/LATO/Czwartki/Analiza_Python_FIZ_MED_1st_1rok/Projekt_2"
+# os.chdir(path_inp)
+# df = pd.read_csv(file, delimiter=',',skiprows=0,usecols=[0,1,2,3])
+@st.cache_data
+@st.cache_data(ttl=1, show_spinner=False)
+@st.cache_data(show_spinner=False)
 def load_my_data():
     filename_1 = "ecg.txt"
     file_id1 = '1h51q75CzyWE75pPT0uI6uXoZzdVmFJkJ'
+  
+    # Funkcja pomocnicza do pobierania
+    def download_file(file_id, output_name):
+        url = f'https://drive.google.com/uc?id={file_id}'
+        # Jeśli plik istnieje, usuwamy go, aby gdown pobrał nową wersję
+        if os.path.exists(output_name):
+            os.remove(output_name)
+        
+        try:
+            # gdown czasami potrzebuje parametru fuzzy=True dla GDrive
+            gdown.download(url, output_name, quiet=False, fuzzy=True)
+        except Exception as e:
+            st.error(f"Błąd pobierania {output_name}: {e}")
+
+    # Pobieranie plików
+    with st.spinner('Synchronizacja z Google Drive...'):
+        download_file(file_id1, filename_1)
+        download_file(file_id2, filename_2)
+
+    # Wczytywanie
+    try:
+        data = pd.read_pickle(filename_1)
+        data2 = pd.read_pickle(filename_2)
+        return data, data2
+    except Exception as e:
+        st.error(f"Błąd wczytywania pkl: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+# Wywołanie danych
+df, df2 = load_my_data()
+
+df['S0_MOL_Opt'] = df.apply(lambda x: stworz_mol_z_optymalizacji(x['Starting_Structure_MOL'], x['S0_XYZ_Opt']), axis=1)
+
+#%%---------------------------------------Tytuł--------------------------------
+st.markdown("""<hr style="height:5px; border:none; color:#444444; background-color:#444444;" />""", unsafe_allow_html=True)
+   
+kolor_ramki = "#ff9300"  # Twój kolor (np. niebieski)
+kolor_tla = "#363636"    # Jasny odcień dla wypełnienia
+
+st.markdown(f"""
+    <style>
+    .moja-ramka {{
+        
+        border-radius: 10px;
+        padding: 20px;
+        background-color: {kolor_tla};
+        text-align: center;
+        height: 120px;
+    }}
+    .moja-ramka h4 {{
+        color: {kolor_ramki};
+        margin: 0;
+    }}
+    </style>
+    
+    <div class="moja-ramka">
+        <h4>Machine Learning XYZ</h4>
+        <p style="color: #fff8db;">Baza danych</p>
+    </div>
+    """, unsafe_allow_html=True)            
+
+st.markdown("""<hr style="height:5px; border:none; color:#444444; background-color:#444444;" />""", unsafe_allow_html=True)      
+ 
+st.markdown('<span style="color: #ff9300; font-weight: bold;">Input Dataframe</span>', unsafe_allow_html=True)
+st.dataframe(df)
+
+
+            
+            
+#%%
+
+# 1. Przykładowy słownik opisów (dostosuj do swojego DF)
+column_descriptions = {
+    "ID": "Unikalny identyfikator cząsteczki w bazie danych.",
+    "Linker": "Typ modyfikacji linkera",
+    "Starting_Structure_MOL": "Obiekt RDKit Mol reprezentujący strukturę wejściową (przed optymalizacją).",
+    "S0_XYZ_Opt": "Współrzędne kartezjańskie (XYZ) struktury po optymalizacji w stanie podstawowym S0.",
+    "S0_Opt_Mol": "Zoptymalizowana struktura zapisana jako obiekt Mol.",
+    "Energy": "Energia całkowita układu obliczona metodą DFT [Hartree].",
+    "RMSD": "Wartość odchylenia średniokwadratowego między strukturą startową a zoptymalizowaną."
+}
+
+with st.expander("🔍 Szczegóły bazy danych i statystyki kolumn", expanded=False):
+    # 1. Przygotowanie danych z liczeniem wartości non-null
+    info_data = []
+    
+    # Liczymy wystąpienia non-null dla całego DF raz, aby było szybciej
+    counts = df.count() 
+    
+    for col in df.columns:
+        desc = column_descriptions.get(col, "Brak opisu.")
+        dtype = str(df[col].dtype)
+        val_count = counts[col]  # Pobieramy liczbę wartości nie-będących None/NaN
+        
+        info_data.append({
+            "Kolumna": col, 
+            "Typ": dtype, 
+            "Opis": desc,
+            "Liczba wartości": val_count
+        })
+    
+    info_df = pd.DataFrame(info_data)
+
+    # 2. Stylizacja tabeli
+    def style_table(styler):
+        # Nagłówki - pomarańczowy styl
+        styler.set_table_styles([
+            {'selector': 'th', 'props': [
+                ('background-color', '#ff9300'), 
+                ('color', 'white'), 
+                ('font-weight', 'bold'),
+                ('text-align', 'center')
+            ]}
+        ])
+        # Wyróżnienie nazw kolumn
+        styler.set_properties(subset=['Kolumna'], **{'color': '#ff9300', 'font-weight': 'bold'})
+        
+        # Kolorowanie liczby wartości (opcjonalnie na zielono)
+        styler.set_properties(subset=['Liczba wartości'], **{'color': '#4CAF50', 'font-weight': 'bold'})
+        
+        # Ogólny wygląd komórek
+        styler.set_properties(**{
+            'background-color': '#1e1e1e', 
+            'color': '#cccccc', 
+            'border': '1px solid #333'
+        })
+        return styler
+
+    # 3. Wyświetlenie
+    styled_df = info_df.style.pipe(style_table)
+    
+    st.dataframe(
+        styled_df, 
+        use_container_width=True, 
+        hide_index=True
+    )
+
+    # Dodatkowe info o całym zbiorze pod tabelą
+    st.caption(f"Całkowita liczba wierszy w bazie: {len(df)}")
+
+
+#%%
+
+st.markdown("""<hr style="height:5px; border:none; color:#444444; background-color:#444444;" />""", unsafe_allow_html=True)           
+
+# --- FILTROWANIE I SORTOWANIE ---
+
+
+
+
+
+# --- UKŁAD STRONY ---
+# Lewa: Galeria (2.5), Środek: Wizualizacja 3D (3), Prawa: Kontrolki (1.5)
+main_col_left, main_margin1,main_col_mid,main_margin2, main_col_right = st.columns([4,0.05, 1.7,0.05, 0.9])
+
+# Pobieramy aktualnie wybraną strukturę
+
+
+# --- 1. LEWA KOLUMNA: GALERIA NAWIGACYJNA ---
+
+with main_col_left:
+    
+    if 'Linker' in df.columns:
+        # Pobieramy unikalne wartości i sortujemy je naturalnie (R1, R2, ..., R10)
+        available_ls = df['Linker'].unique()
+        
+        # OPCJA A: Używając natsort (najwygodniejsze)
+        available_ls = natsorted(available_ls)
+        
+        # OPCJA B: Jeśli nie masz natsort, odkomentuj linię poniżej:
+        # available_ls = sorted(available_ls, key=natural_sort_key)
+        
+        
+        selected_l = st.selectbox("Wybierz typ modyfikacji linkera", available_ls)
+        
+        # Filtrowanie
+        df_filtered = df[df['Linker'] == selected_l].copy()
+        
+        # Sortujemy również wiersze wewnątrz grupy (np. po ID lub innej kolumnie)
+        # tak, aby w galerii też były po kolei
+        df_filtered['sort_key'] = df_filtered['ID'].apply(natural_sort_key)
+        df_filtered = df_filtered.sort_values(by='sort_key').drop(columns=['sort_key'])
+    else:
+        df_filtered = df.head(16)
+        
+        
+    current_id = st.session_state.get('selected_id', df['ID'].iloc[0])
+    selected_row = df[df['ID'] == current_id].iloc[0]
+
+    # KOMPLETNY CSS: kolorowanie aktywnego oraz zmniejszenie wysokości
+    st.markdown("""
+        <style>
+        /* 1. Styl dla przycisku wybranego (Zielony) */
+        div[data-testid="stButton"] button[kind="primary"] {
+            background-color:  #ff9300 !important;
+            color: white !important;
+            border-color: #ff9300 !important;
+        }
+
+        /* 2. Zmniejszenie wysokości wszystkich przycisków w galerii */
+        div[data-testid="stButton"] button {
+            padding-top: 0px !important;
+            padding-bottom: 0px !important;
+            height: 24px !important; /* Tutaj kontrolujesz wysokość w osi Y */
+            min-height: 24px !important;
+            line-height: 24px !important;
+        }
+        
+        /* 3. Wycentrowanie ikony ptaszka w mniejszym przycisku */
+        div[data-testid="stButton"] button p {
+            font-size: 14px !important;
+            margin-top: -2px !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+
+
+    n_cols_gal = 8  # 4 kolumny wewnątrz lewego panelu
+    
+    # Grupowanie wierszy galerii
+    gallery_rows = [df_filtered[i:i + n_cols_gal] for i in range(0, len(df_filtered), n_cols_gal)]
+    
+    for row_data in gallery_rows:
+        cols = st.columns(n_cols_gal)
+        for i, (idx, row) in enumerate(row_data.iterrows()):
+            with cols[i]:
+                m = row['Starting_Structure_MOL']
+                if m:
+                    # 1. Przygotowanie obrazka
+                    m_2d = Chem.Mol(m)
+                    m_2d = Chem.RemoveHs(m_2d)
+                    AllChem.Compute2DCoords(m_2d)
+                    img = Draw.MolToImage(m_2d, size=(200, 200))
+                    st.image(img, use_container_width=True)
+                    
+                    # 2. Podpis ID
+                    st.markdown(f'<div style="text-align:center; font-size:11px; color:#ffffff;">{row["ID"]}</div>', unsafe_allow_html=True)
+                    
+                    # --- KLUCZOWA ZMIANA TUTAJ ---
+                    # Sprawdzamy, czy ten wiersz jest tym wybranym
+                    is_active = (row['ID'] == current_id)
+                    
+                    # Jeśli aktywny, dajemy type="primary" (zadziała Twój CSS), jeśli nie - "secondary"
+                    btn_type = "primary" if is_active else "secondary"
+                    
+                    if st.button("✔", key=f"gal_{row['ID']}", use_container_width=True, type=btn_type):
+                        st.session_state['selected_id'] = row['ID']
+                        st.rerun()
+
+
+with main_margin1:
+    pass
+    
+    
+with main_col_right:
+    # Sekcja ustawień pozostaje bez zmian (używamy Twoich domyślnych wartości)
+    st.markdown(f"""
+        <div style="font-size: 16px; font-weight: bold; margin-bottom: 15px;">Struktura 2D: <span style="color: #ff9300;">{current_id}</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    mol_start = selected_row.get('Starting_Structure_MOL')
+    mol_start_2d = Chem.Mol(mol_start)
+    mol_start_2d = Chem.RemoveHs(mol_start_2d)
+    AllChem.Compute2DCoords(mol_start_2d)
+    img = Draw.MolToImage(mol_start_2d, size=(400, 400))
+    st.image(img, use_container_width=True)
+    
+    
+    
+    with st.expander("Wygląd 3D", expanded=True):
+        thickness = st.slider("Grubość wiązań:", 0.05, 0.6, 0.15, 0.05, key=f"thick_{current_id}")
+        show_h_3d = st.checkbox("Pokaż wodory (H)", value=True, key=f"h_3d_{current_id}")
+        bg_color = st.select_slider("Tło:", options=["white", "#363636", "black"], value="#363636", key=f"bg_{current_id}")
+
+
+
+
+with main_margin2:
+    pass
+    
+
+
+
+
+
+
+
+# --- 3. ŚRODKOWA KOLUMNA: WIZUALIZACJA 3D ---
+with main_col_mid:
+    
+    st.markdown(f"""
+        <div style="font-size: 16px; font-weight: bold; margin-bottom: 15px;">Struktura 3D: <span style="color: #ff9300;">{current_id}</span>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+        <div style="
+            background-color: {kolor_tla}; 
+            border-radius: 10px; 
+            padding: 1px;
+            margin-left: -10px;
+            margin-right: -14px;
+            margin-bottom: -590px; /* Trik, żeby 'podłożyć' tło pod wykres */
+            height: 450px;
+        ">
+        </div>
+    """, unsafe_allow_html=True)
+    tab1, tab2, tab3 = st.tabs(["Starting_Structure", "S0-Optimized_Structure", "Overlay"])
+   
+
+    
+    with tab1:
+
+    
+    
+    
+# W sekcji wizualizacji (main_col_mid):
+        
+    # Pobieramy obiekt MOL
+        mol_start = selected_row.get('Starting_Structure_MOL')
+    
+        if mol_start:
+        # Tworzymy kopię, aby nie modyfikować oryginału w DataFrame
+            view_mol = Chem.Mol(mol_start)
+        
+        # Konwersja obiektu RDKit na blok tekstowy MOL
+            mol_block = Chem.MolToMolBlock(view_mol)
+        
+            view = py3Dmol.view(width=500, height=350)
+        # Ważne: zmieniamy format na 'mol'
+            view.addModel(mol_block, 'mol')
+
+        # Ustawiamy styl stick
+            view.setStyle({'stick': {'colorscheme': 'Jmol', 'radius': thickness}, 
+                           'sphere': {'colorscheme': 'Jmol', 'radius': 0.3}})
+        
+        # Obsługa ukrywania wodorów
+            if not show_h_3d:
+                view.setStyle({'elem': 'H'}, {}) 
+            
+            view.zoomTo()
+            view.setBackgroundColor(bg_color)
+        
+        # Render
+            obj = view._make_html()
+        # Zwiększyłem wysokość komponentu, by pasowała do widoku
+            components.html(obj, height=400, width=610)
+        else:
+                st.error("Brak obiektu MOL (Starting_Structure_MOL) dla tej cząsteczki.")
+                
+                
+                
+                
+                
+    with tab2:
+
+    
+    
+    # Pobieramy obiekt MOL
+        mol_start = selected_row.get('S0_MOL_Opt')
+    
+        if mol_start:
+        # Tworzymy kopię, aby nie modyfikować oryginału w DataFrame
+            view_mol = Chem.Mol(mol_start)
+        
+        # Konwersja obiektu RDKit na blok tekstowy MOL
+            mol_block = Chem.MolToMolBlock(view_mol)
+        
+            view = py3Dmol.view(width=500, height=350)
+        # Ważne: zmieniamy format na 'mol'
+            view.addModel(mol_block, 'mol')
+        
+        # Ustawiamy styl stick
+            view.setStyle({'stick': {'colorscheme': 'Jmol', 'radius': thickness}, 
+                           'sphere': {'colorscheme': 'Jmol', 'radius': 0.3}})
+        
+        # Obsługa ukrywania wodorów
+            if not show_h_3d:
+                view.setStyle({'elem': 'H'}, {}) 
+            
+            view.zoomTo()
+            view.setBackgroundColor(bg_color)
+        
+        # Render
+            obj = view._make_html()
+        # Zwiększyłem wysokość komponentu, by pasowała do widoku
+            components.html(obj, height=400, width=610)
+        else:
+                st.error("Brak obiektu MOL (S0_MOL_Opt) dla tej cząsteczki.")
+        
+
+st.markdown("""<hr style="height:5px; border:none; color:#444444; background-color:#444444;" />""", unsafe_allow_html=True)
+
+with tab3:
+
+    
+    
+    mol_start = selected_row.get('Starting_Structure_MOL')
+    mol_opt = selected_row.get('S0_MOL_Opt') # Zakładam, że tu jest obiekt RDKit Mol
+
+    if mol_start and mol_opt:
+    # Tworzymy kopie, żeby nie psuć oryginałów
+        m1 = Chem.Mol(mol_start)
+        m2 = Chem.Mol(mol_opt)
+
+    # Usunięcie wodorów do obliczeń, jeśli użytkownik tak wybrał (opcjonalnie)
+        if not show_h_3d:
+            m1 = Chem.RemoveHs(m1)
+            m2 = Chem.RemoveHs(m2)
+
+    # --- NAKŁADANIE (ALIGNMENT) ---
+    # Dopasowujemy m2 (zoptymalizowaną) do m1 (startowej)
+        rmsd = rdMolAlign.AlignMol(m2, m1)
+    
+    # Przygotowanie bloków tekstowych
+        block1 = Chem.MolToMolBlock(m1)
+        block2 = Chem.MolToMolBlock(m2)
+
+    # --- WIZUALIZACJA py3Dmol ---
+        view = py3Dmol.view(width=600, height=350)
+    
+    # Dodajemy pierwszą strukturę (np. szara)
+        view.addModel(block1, 'mol')
+        view.setStyle({'model': 0}, {'stick': {'color': '#919191', 'radius': thickness}})
+    
+    # Dodajemy drugą strukturę (np. Twoje kolory Jmol lub konkretny kolor)
+        view.addModel(block2, 'mol')
+        view.setStyle({'model': 1}, {'stick': {'colorscheme': 'cyanCarbon', 'radius': thickness}})
+
+    # Obsługa wodorów
+        if not show_h_3d:
+            view.setStyle({'elem': 'H'}, {})
+
+        view.zoomTo()
+        view.setBackgroundColor(bg_color)
+    
+    # Wyświetlenie RMSD jako metryki pod spodem
+
+
+    # Render
+        obj = view._make_html()
+        components.html(obj, height=400, width=610)
+    else:
+            st.error("Brak jednej ze struktur (Startowej lub Zoptymalizowanej) do nałożenia.")
+
+
+
+
+# Zakładamy, że selected_id to ID wybrane przez użytkownika (np. ze st.selectbox)
+row = df[df['ID'] == current_id].iloc[0]
+
+# 1. Pobranie danych z nowej kolumny
+vibrations = row.get('Vibrational_Vectors', None)
+
+       
+
+# --- FUNKCJA POMOCNICZA DLA ANIMACJI ---
+def create_vibration_xyz(mol, vectors, amplitude=2, num_frames=45):
+    if not vectors or mol is None:
+        return None
+    xyz_frames = ""
+    conf = mol.GetConformer()
+    symbols = [a.GetSymbol() for a in mol.GetAtoms()]
+    for i in range(num_frames):
+        scale = amplitude * np.sin(2 * np.pi * i / num_frames)
+        xyz_frames += f"{mol.GetNumAtoms()}\nFrame {i}\n"
+        for a_idx, sym in enumerate(symbols):
+            pos = conf.GetAtomPosition(a_idx)
+            new_x = pos.x + vectors[a_idx][0] * scale
+            new_y = pos.y + vectors[a_idx][1] * scale
+            new_z = pos.z + vectors[a_idx][2] * scale
+            xyz_frames += f"{sym} {new_x:10.6f} {new_y:10.6f} {new_z:10.6f}\n"
+    return xyz_frames
+
+
+with st.expander("Frequency Analysis",expanded=False):
+# --- WIDOK W STREAMLIT ---
+    row = df[df['ID'] == current_id].iloc[0]
+    vibrations = row.get('Vibrational_Vectors', [])
+
+    if isinstance(vibrations, list) and len(vibrations) > 0:
+        col_list, col_view, col_param = st.columns([1, 2,1])
+    
+        with col_list:
+            st.write("### 📋 Lista Modów")
+            # Wybór modu
+            mode_options = [v['mode_index'] for v in vibrations]
+            selected_mode_idx = st.radio(
+                "Wybierz drganie do animacji:",
+                options=mode_options,
+                format_func=lambda x: f"Mod {x}: {next(v['frequency'] for v in vibrations if v['mode_index'] == x):.2f} cm⁻¹"
+            )
+            
+            # Pobranie danych wybranego modu
+
+    
+        with col_param:
+            current_mode = next(v for v in vibrations if v['mode_index'] == selected_mode_idx)
+            freq_val = current_mode['frequency']
+            
+            st.metric("Częstotliwość", f"{freq_val:.2f} cm⁻¹")
+            amp = st.slider("Amplituda drgań", 0.1, 5.0, 4.0, key="amp_slider")
+        
+        with col_view:
+            st.write("### 🎬 Podgląd 3D")
+            
+            # Generowanie klatek animacji dla wybranego modu
+            # Upewnij się, że w S0_MOL_Opt masz obiekt RDKit
+            vibr_xyz = create_vibration_xyz(row['S0_MOL_Opt'], current_mode['vectors'], amplitude=amp)
+            
+            if vibr_xyz:
+                view = py3Dmol.view(width=500, height=400)
+                view.addModelsAsFrames(vibr_xyz, 'xyz')
+                view.setStyle({'stick': {'colorscheme': 'Jmol', 'radius': 0.1}, 
+                               'sphere': {'colorscheme': 'Jmol', 'radius': 0.3}})
+                view.setBackgroundColor(kolor_tla)
+                view.animate({
+        'loop': 'forward', # lub 'backAndForth' dla naturalnego ruchu
+        'step': 3,       # mniejsza wartość = znacznie większa szybkość i płynność
+        'reps': 0          # 0 oznacza nieskończoną liczbę powtórzeń (continuous)
+    })
+                view.zoomTo()
+                
+                tjs = view._make_html()
+                components.html(tjs, height=420)
+            else:
+                st.error("Błąd generowania klatek XYZ.")
+        
+                
+                
+                
+    else:
+        st.warning("Brak danych wibracyjnych dla tego emitera.")
+
+
+
+
+    # 1. Panel wyboru kolumn po prawej stronie
+with st.expander("Energie i SOC", expanded=True):
+    # Sprawdzamy czy df2 nie jest pusty
+    if not df2.empty:
+        # Automatycznie wykrywamy kolumny numeryczne do kolorowania
+        numeric_cols = df2.select_dtypes(include=['number']).columns
+        
+        # Tworzymy ostylowany widok dla całego dataframe
+        styled_df = df2.style.background_gradient(
+            cmap='coolwarm', 
+            subset=numeric_cols
+        ).format(precision=4) # Zaokrąglenie wszystkich liczb do 4 miejsc
+        
+        # Wyświetlamy tabelę na pełną szerokość
+        st.dataframe(
+            styled_df, 
+            height=600, 
+            use_container_width=True
+        )
+    else:
+        st.info("Brak danych do wyświetlenia w tabeli SOC.")
+
+
+# --- WYKRES 1: S1 ---
+fig = px.scatter(
+    df2, 
+    x='Energy_GAP_S1_T1', 
+    y='S1',
+    hover_name='ID',
+    color='S1',                # Kolor zmienia się wraz z wartością S1
+    color_continuous_scale='Viridis', # Ładna skala kolorów (fiolet-żółty)
+    title="Korelacja GAP vs S1",
+    labels={'Energy_GAP_S1_T1': 'Energy GAP S1-T1 [eV]', 'S1': 'S1 [eV]'},
+    template="plotly_white"
+)
+# Powiększenie markerów (size=15) i dodanie obramowania, żeby były wyraźne
+fig.update_traces(marker=dict(size=15, line=dict(width=1, color='DarkSlateGrey')))
+
+# --- WYKRES 2: T1 ---
+fig2 = px.scatter(
+    df2, 
+    x='Energy_GAP_S1_T1', 
+    y='T1',
+    hover_name='ID',
+    color='T1',               # Kolor zmienia się wraz z wartością T1
+    color_continuous_scale='Plasma', # Inna skala dla rozróżnienia (róż-żółty)
+    title="Korelacja GAP vs T1",
+    labels={'Energy_GAP_S1_T1': 'Energy GAP S1-T1 [eV]', 'T1': 'T1 [eV]'},
+    template="plotly_white"
+)
+# Powiększenie markerów (size=15)
+fig2.update_traces(marker=dict(size=15, line=dict(width=1, color='DarkSlateGrey')))
+
+# --- WYŚWIETLANIE ---
+col_l, col_r = st.columns([1, 1])
+
+with col_l:
+    # Dodany klucz 'key', żeby Streamlit nie wyrzucił błędu duplikacji
+    st.plotly_chart(fig, use_container_width=True, key="scatter_s1")
+
+with col_r:
+    # Dodany klucz 'key'
+    st.plotly_chart(fig2, use_container_width=True, key="scatter_t1")
+
+
+
+st.sidebar.markdown("""
+    <style>
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        gap: 0.15rem !important;
+    }
+    [data-testid="stSidebar"] div.stImage > img {
+        margin-top: -5px;
+        margin-bottom: -5px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.sidebar.markdown("### Legenda")
+
+# Wywołujemy funkcję bezpośrednio (bez if button)
+wyniki_l2 = wykonaj_analize_L2(df, "D5_L1_R_A1.xyz")
+
+
+
+if wyniki_l2:
+    for item in wyniki_l2:
+        match = re.search(r'R\d+', item['ID'])
+        label = match.group(0) if match else item['ID']
+        
+        # 1. Tworzymy kontener, który będzie naszym "kafelkiem"
+        with st.sidebar.container():
+            # Nakładamy styl na ten konkretny kontener
+            st.markdown(f"""
+                <style>
+                div[data-testid="stVerticalBlock"] > div:has(div.stMarkdown p:contains("{label}")) {{
+                    background-color: #444444;
+                    border-radius: 10px;
+                    padding: 5px;
+                    margin-bottom: 5px;
+                    border: 1px solid #555;
+                }}
+                </style>
+            """, unsafe_allow_html=True)
+
+            # 2. Używamy kolumn wewnątrz kontenera
+            c1, c2 = st.columns([1, 2])
+            
+            with c1:
+                # Etykieta (Orange) - dodajemy margines, żeby zjechała do środka
+                st.markdown(f"""
+                    <div style="
+                        color: #ff9300; 
+                        font-weight: bold; 
+                        font-size: 18px; 
+                        margin-top: 20px; 
+                        text-align: center;
+                    ">
+                        {label}
+                    </div>
+                """, unsafe_allow_html=True)
+                
+            with c2:
+                if item['Obrazek']:
+                    st.image(item['Obrazek'], width=85)
+                else:
+                    st.markdown('<div style="margin-top:20px; color:#ff9300; text-align:center;">H</div>', unsafe_allow_html=True)
+
+# 3. Jeszcze mocniejsze zagęszczenie całości
+st.sidebar.markdown("""
+    <style>
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        gap: 0.3rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+ 
