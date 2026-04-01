@@ -191,7 +191,7 @@ with col2:
     "Liczba próbek": [ile_zostalo, ile_wycieto]}
 '''
 # 3. Tworzenie wykresu Plotly Express
-    fig_pie = px.pie(
+fig_pie = px.pie(
     dane_pie, 
     values='Liczba próbek', 
     names='Status',
