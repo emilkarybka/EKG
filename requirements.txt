@@ -10,4 +10,4 @@ gdown
 matplotlib
 scipy
 neurokit2
-edm
+emd
